@@ -590,6 +590,9 @@ Commands.register({
 });
 
 for (let file of commandFiles) {
+    if (!file.endsWith(".js")) {
+        continue;
+    }
     let command = require(__dirname + "/commands/" + file);
     Commands.register(command);
 }

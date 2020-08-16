@@ -15,6 +15,9 @@ webapp.use(bodyParser.urlencoded({extended: false}));
 webapp.use(bodyParser.json());
 
 let config = JSON.parse(fs.readFileSync(__dirname + "/config/config.json", "utf8"));
+let packagejson = JSON.parse(fs.readFileSync(__dirname + "/package.json", "utf8"));
+
+console.log(packagejson.namePretty, "V" + packagejson.version);
 
 let serverurl;
 let httpPort = config.httpPort;

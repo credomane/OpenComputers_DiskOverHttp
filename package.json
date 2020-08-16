@@ -1,6 +1,7 @@
 {
   "name": "opencomputersdiskoverhttp",
-  "version": "1.0.0",
+  "namePretty": "OpenComputers Disk over HTTP",
+  "version": "0.0.1",
   "description": "Open Computer disks over HTTP",
   "main": "index.js",
   "scripts": {

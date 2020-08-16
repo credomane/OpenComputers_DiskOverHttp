@@ -441,10 +441,10 @@ webapp.get('/disk/:disk/lastmodified*', function (req, res) {
     let diskObj = diskMan.loadFilesystem(disk);
 
     let result = diskObj.lastModified(file);
-    if (result > 0) {
-        console.ok(disk, "lastModified", "Attempted to get file last modified on unmanaged disk.");
+    if (result < 0) {
+        console.fail(disk, "lastModified", "Failed to get last modified time",result);
     } else {
-        console.fail(disk, "lastModified", "Attempted to get file last modified on unmanaged disk.");
+        console.ok(disk, "lastModified", result);
     }
     res.send("" + result).end();
 });
@@ -483,9 +483,16 @@ webapp.get('/disk/:disk/size*', function (req, res) {
     }
     let diskObj = diskMan.loadFilesystem(disk);
 
+    if(diskObj.isDirectory(file)){
+        console.warn(disk, "size", file, "Attempted to get size of directory sending 0");
+        res.send("0").end();
+        return;
+    }
+
     let result = diskObj.size(file);
     if (result < 0) {
         console.fail(disk, "size", file, result);
+        result = 0
     } else {
         console.ok(disk, "size", file, result + " bytes");
     }

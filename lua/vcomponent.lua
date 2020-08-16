@@ -1,3 +1,5 @@
+--Author gamax92 at https://github.com/OpenPrograms/gamax92-Programs/tree/master/vcomponent
+--License: Unknown
 local proxylist = {}
 local proxyobjs = {}
 local typelist = {}

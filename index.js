@@ -6,6 +6,7 @@ const bodyParser = require("body-parser");
 const OCdisk = require("./lib/OCDisk");
 const ec = require("./lib/ErrorCodes");
 const ConsoleHijack = require("./lib/ConsoleHijack");
+const Commands = require("./lib/Commands");
 
 let diskMan = new OCdisk(__dirname + "/disks/");
 
@@ -442,7 +443,7 @@ webapp.get('/disk/:disk/lastmodified*', function (req, res) {
 
     let result = diskObj.lastModified(file);
     if (result < 0) {
-        console.fail(disk, "lastModified", "Failed to get last modified time",result);
+        console.fail(disk, "lastModified", "Failed to get last modified time", result);
     } else {
         console.ok(disk, "lastModified", result);
     }
@@ -483,7 +484,7 @@ webapp.get('/disk/:disk/size*', function (req, res) {
     }
     let diskObj = diskMan.loadFilesystem(disk);
 
-    if(diskObj.isDirectory(file)){
+    if (diskObj.isDirectory(file)) {
         console.warn(disk, "size", file, "Attempted to get size of directory sending 0");
         res.send("0").end();
         return;
@@ -539,11 +540,11 @@ webapp.all("*", function (req, res) {
 let websrv = require("http").createServer(webapp).listen(httpPort);
 
 
-/**************************\
+/**************************
  * Pterodactyl is weird and won't send ^C to nodejs properly.
  * So I added a graceful stop feature here when "stop" is read on stdin.
  *   --Credo
- \**************************/
+ **************************/
 function dobotshutdown() {
     console.forcelog('Terminating!');
     websrv.close();
@@ -562,14 +563,34 @@ let rl = readline.createInterface({
 });
 
 rl.on('line', function (line) {
-    if (line.toLowerCase() === "stop") {
-        dobotshutdown();
-    } else {
-        console.warn("unknown command: " + line);
+    if (line.startsWith("/")) {
+        if (!Commands.run(line)) {
+            console.warn("unknown command: " + line);
+        }
     }
 })
 
-/**************************\
- * Say where are ready so pterodactyl switches from "Starting..." to "Online"
- \**************************/
+/**************************
+ * Build up the commands for cli interactions.
+ **************************/
+const commandFiles = fs.readdirSync(__dirname + "/commands");
+
+Commands.addParameter("diskMan", diskMan);
+
+Commands.register({
+    "name": "stop",
+    "description": "Stops the server",
+    "help": "",
+    execute(args, params) {
+        dobotshutdown();
+    }
+});
+
+for (let file of commandFiles) {
+    let command = require(__dirname + "/commands/" + file);
+    Commands.register(command);
+}
+/**************************
+ * Say we are ready so pterodactyl switches from "Starting..." to "Online"
+ **************************/
 console.forcelog("Ready!");

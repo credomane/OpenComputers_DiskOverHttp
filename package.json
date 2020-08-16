@@ -1,5 +1,5 @@
 {
-  "name": "opencomputershttpdisk",
+  "name": "opencomputersdiskoverhttp",
   "version": "1.0.0",
   "description": "Open Computer disks over HTTP",
   "main": "index.js",
@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "express": "^4.17.1",
+    "minimist": "^1.2.5",
     "uuid": "^8.3.0"
   }
 }

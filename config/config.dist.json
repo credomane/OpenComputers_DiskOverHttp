@@ -1,0 +1,6 @@
+{
+  "httpPort": 8080,
+  "server": "http://localhost",
+  "uri": "/",
+  "loggingLevel": "warning"
+}

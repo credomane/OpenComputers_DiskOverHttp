@@ -549,7 +549,7 @@ let websrv = require("http").createServer(webapp).listen(httpPort);
  *   --Credo
  **************************/
 function dobotshutdown() {
-    console.forcelog('Terminating!');
+    console.log('Terminating!');
     websrv.close();
     process.exit(0);
 }
@@ -599,4 +599,4 @@ for (let file of commandFiles) {
 /**************************
  * Say we are ready so pterodactyl switches from "Starting..." to "Online"
  **************************/
-console.forcelog("Ready!");
+console.log("Ready!");

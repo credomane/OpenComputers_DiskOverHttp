@@ -5,6 +5,6 @@ module.exports = {
         return "";
     },
     execute(args, params) {
-        console.forcelog("Not Yet Implemented");
+        console.log("Not Yet Implemented");
     }
 };

@@ -1,8 +1,7 @@
 --Note these two shorthands are used by the httpfs.lua and httpdrv.lua
 --Figured save the space since they all get concatenated together anyways.
 --And we want to make them after vcomponent.lua takes them over.
-local cl = component.list;
-local ci = component.invoke;
+local cl, ci, cp = component.list, component.invoke, component.proxy;
 
 local function bootdisk(disk, file)
     for address in cl("filesystem", true) do
@@ -48,7 +47,7 @@ local function bootdrive(drive)
                 error("Can't read sector: " .. reason, 0)
             end
 
-            code = code:sub(1,512);
+            code = code:sub(1, 512);
 
             local init, reason = load(code, "=httpdrv.init.lua")
             if not init then

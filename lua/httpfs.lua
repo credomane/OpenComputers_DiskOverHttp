@@ -64,7 +64,7 @@ local function httpfs(address, server)
         cls._pri.handles[handle].path = path;
         cls._pri.handles[handle].mode = mode;
         cls._pri.handles[handle].size = size;
-        cls._pri.handles[handle].pointer = 1;
+        cls._pri.handles[handle].pointer = 0;
 
         cls._pri.nextHandle = cls._pri.nextHandle + 1
         return handle
@@ -87,8 +87,8 @@ local function httpfs(address, server)
             h.pointer = h.size + offset
         end
 
-        if h.pointer < 1 then
-            h.pointer = 1
+        if h.pointer < 0 then
+            h.pointer = 0
         elseif h.pointer > h.size then
             h.pointer = h.size
         end

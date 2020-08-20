@@ -30,7 +30,7 @@
 
     local function boot_target(target)
         local code, inet, address = "", cl("internet", true)()
-        if string.match(target, "http://") or string.match(target, "http://") then
+        if string.match(target, "http://") or string.match(target, "https://") then
             if not inet or not ci(inet, "isHttpEnabled") then
                 error("No internet card available or HTTP disabled", 0)
             end

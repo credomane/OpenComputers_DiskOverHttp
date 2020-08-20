@@ -34,7 +34,7 @@ if (config.httpPort === 80 || config.httpPort === 443) {
 //Pre-cache the pieces needed to actually initialize http booting.
 let file_vcomponent = fs.readFileSync(__dirname + "/lua/vcomponent.lua", "utf8");
 let file_bootloader = fs.readFileSync(__dirname + "/lua/bootloader.lua");
-let file_httpfs = fs.readFileSync(__dirname + "/lua/httpfs.lua", "utf8");
+let file_httpfs = fs.readFileSync(__dirname + "/lua/httpfs.new.lua", "utf8");
 let file_httpdrv = fs.readFileSync(__dirname + "/lua/httpdrv.lua", "utf8");
 
 //This is ran everytime :disk is used in the routes.
@@ -42,6 +42,11 @@ webapp.param("disk", function (req, res, next, value) {
     let disk = req.params.disk;
     if (!diskMan.exists(disk)) {
         console.error(disk, "Disk not found.");
+        res.status(404).send("" + ec.nodisk).end();
+        return;
+    }
+    if (!diskMan.isValidUUID(disk)) {
+        console.error(disk, "Disk UUID is invalid.");
         res.status(404).send("" + ec.nodisk).end();
         return;
     }
@@ -54,21 +59,16 @@ webapp.param("disk", function (req, res, next, value) {
 // 2. Bootloader (author: credomane) Handles getting the first file off httpfs or reading the MBR on httpdrv.
 // 3. httpfs/httpdrv (author: credomane) The heart of this project.
 // 4. Some fileless lua to handle getting the ducks in line so virtual disk can be booted.
-webapp.get('/boot/:fstype/:disk*', function (req, res) {
-    let fstype = req.params.fstype.toLowerCase();
+webapp.get('/boot/:disk*', function (req, res) {
+    let fstype = "";
     let disk = req.params.disk.toLowerCase();
     let file = req.params[0];
     let stuff = "";
 
-    if (fstype === "httpfs" && !diskMan.isManaged(disk)) {
-        console.error(disk, "httpfs requires managed disk");
-        res.status(404).send("" + ec.fsneedsmanaged).end();
-        return;
-    }
-    if (fstype === "httpdrv" && diskMan.isManaged(disk)) {
-        console.error(disk, "httpdrv requires unmanaged disk");
-        res.status(404).send("" + ec.drvneedsunmanaged).end();
-        return;
+    if (diskMan.isManaged(disk)) {
+        fstype = "httpfs"
+    } else {
+        fstype = "httpdrv"
     }
 
     stuff += "--vcomponent.lua\n" + file_vcomponent + "\n";
@@ -79,13 +79,13 @@ webapp.get('/boot/:fstype/:disk*', function (req, res) {
         stuff += "--bootcode\n";
         stuff += "local disk = httpfs('" + disk + "','" + serverurl + "');\n";
         stuff += "component.virtual_register('" + disk + "', 'filesystem', disk)\n";
-        stuff += "local init = bootdisk('" + disk + "','" + file + "')\n";
+        stuff += "local init = bootdisk('" + disk + "', '" + file + "')\n";
     } else if (fstype === "httpdrv") {
         stuff += "--httpdrv.lua\n" + file_httpdrv + "\n";
         stuff += "--bootcode\n";
         stuff += "local disk = httpdrv('" + disk + "','" + serverurl + "');\n";
         stuff += "component.virtual_register('" + disk + "', 'drive', disk)\n";
-        stuff += "local init = bootdrive('" + disk + "','" + file + "')\n";
+        stuff += "local init = bootdrive('" + disk + "', '" + file + "')\n";
     } else {
         console.error(disk, "Unknown fstype requested:", "'" + fstype + "'");
         res.status(404).end();
@@ -95,7 +95,7 @@ webapp.get('/boot/:fstype/:disk*', function (req, res) {
     stuff += "computer.setBootAddress('" + disk + "')\n";
     stuff += "init()\n";
 
-    console.info(disk, "Sending bootcodefor", "'" + fstype + "'");
+    console.info(disk, "Sending bootcode for", "'" + fstype + "'");
     res.type("application/lua").send("" + stuff).end();
 });
 
@@ -599,4 +599,5 @@ for (let file of commandFiles) {
 /**************************
  * Say we are ready so pterodactyl switches from "Starting..." to "Online"
  **************************/
+console.log("Listening on port " + httpPort);
 console.log("Ready!");

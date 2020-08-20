@@ -1,5 +1,7 @@
+local cl, ci, cp = component.list, component.invoke, component.proxy;
+
 local function toboolean(val)
-    --Seems only some lua version have this? or maybe someone else implemented it and I can't find the lua source for it?
+    --Seems only some lua versions/implementations have this? or maybe someone else implemented it in lua and I can't find the lua source for it?
     if val == "true" or val == 1 or val == "1" then
         return true
     end
@@ -15,8 +17,25 @@ local function httpfs(address, server)
     cls._pri.nextHandle = 1 --What file handle id to hand out next?
     cls._pri.handles = {} --holds open handles
 
+    local cache = {}
+    cache.tmpfs = nil;
+    cache.size = 0;
+    cache.used = 0;
+    cache.enabled = false;
+    cache.files = {};
+    cache.path = "/.httpfs/"
+
+    if (computer.tmpAddress() ~= nil) then
+        cache.tmpfs = cp(computer.tmpAddress());
+        cache.size = math.floor(cache.tmpfs.spaceTotal() * 0.25)
+        cache.enabled = true;
+        if cache.tmpfs.exists(cache.path .. address) then
+            cache.tmpfs.remove(cache.path .. address)
+        end
+    end
+
     function cls._pri.request(path, value, headers, method)
-        local req = ci(cl("internet", true)(), "request", cls._pri.server .. "disk/" .. cls._pri.address .. "/" .. path, value, headers, method)
+        local req = ci(cl("internet", true)(), "request", cls._pri.server .. "disk/" .. cls.getAddress() .. "/" .. path, value, headers, method)
         if req.finishConnect() then
             local data = ""
             while true do
@@ -53,7 +72,13 @@ local function httpfs(address, server)
             path = "/" .. path
         end
 
-        local size = tonumber(cls._pri.request("open" .. path, "mode=" .. mode, {}, "POST"))
+        local size = 0
+        if cache.enabled and cache.files[path] and cache.tmpfs.exists(cache.path .. cls.getAddress() .. path) then
+            size = cache.tmpfs.size(cache.path .. cls.getAddress() .. path)
+        else
+            size = tonumber(cls._pri.request("open" .. path, "mode=" .. mode, {}, "POST"))
+        end
+
         if size < 0 then
             --Maybe we tried to read mode a non-existent file or write/append mode a file on a readonly filesystem
             return false, "File doesn't exist"
@@ -67,6 +92,17 @@ local function httpfs(address, server)
         cls._pri.handles[handle].pointer = 0;
 
         cls._pri.nextHandle = cls._pri.nextHandle + 1
+
+
+        --If it is not a pure read only operation force remove the file from cache!
+        if mode ~= "r" then
+            if cache.enabled and cache.files[path] and cache.tmpfs.exists(cache.path .. cls.getAddress() .. path) then
+                cache.used = cache.used - cache.tmpfs.size(cache.path .. cls.getAddress() .. path);
+                cache.tmpfs.remove(cache.path .. cls.getAddress() .. path);
+                table.remove(cache.files, path)
+            end
+        end
+
         return handle
     end
 
@@ -190,6 +226,13 @@ local function httpfs(address, server)
             path = "/" .. path
         end
 
+        --Original is getting deleted; Remove the cached version!
+        if cache.enabled and cache.files[path] and cache.tmpfs.exists(cache.path .. cls.getAddress() .. path) then
+            cache.used = cache.used - cache.tmpfs.size(cache.path .. cls.getAddress() .. path);
+            cache.tmpfs.remove(cache.path .. cls.getAddress() .. path);
+            table.remove(cache.files, path)
+        end
+
         return toboolean(cls._pri.request("remove" .. path, "", {}, "POST"))
     end
 
@@ -224,6 +267,52 @@ local function httpfs(address, server)
             return nil
         end
 
+        if cache.enabled and h.mode == "r" then
+            --Do we need to cache this file?
+            if not (cache.files[h.path] and cache.tmpfs.exists(cache.path .. cls.getAddress() .. h.path)) then
+                --File will fit in cache at all?
+                if h.size < cache.size then
+                    --Will file fit in cache without deleting?
+                    if h.size + cache.used > cache.size then
+                        --Guess not...Time to prune.
+                        for i in pairs(cache.files) do
+                            if h.size + cache.used > cache.size then
+                                local fsize = cache.tmpfs.size(cache.path .. cls.getAddress() .. i)
+                                cache.tmpfs.remove(cache.path .. cls.getAddress() .. i)
+                                cache.used = cache.used - fsize
+                                cache.files[i] = nil
+                            end
+                        end
+                    end
+
+                    local result = cls._pri.request("read" .. h.path, "offset=0&count=" .. h.size, {}, "POST")
+                    if result:len() > 0 then
+                        if not cache.tmpfs.exists(cache.path .. cls.getAddress() .. h.path) then
+                            cache.tmpfs.makeDirectory(cache.path .. cls.getAddress() .. h.path)
+                            cache.tmpfs.remove(cache.path .. cls.getAddress() .. h.path) --I know what's wrong with me?
+                        end
+                        local f = cache.tmpfs.open(cache.path .. cls.getAddress() .. h.path, "w")
+                        cache.tmpfs.write(f, result)
+                        cache.tmpfs.close(f)
+                        cache.used = cache.used + h.size
+                        cache.files[h.path] = true;
+                    end
+                end
+            end
+
+            --Ok. It /should/ be in the cache but just in case.
+            if cache.tmpfs.exists(cache.path .. cls.getAddress() .. h.path) then
+                --Yeah yeah. Lots of rapid file opening and closing. Too lazy to do it "right" right now.
+                local f = cache.tmpfs.open(cache.path .. cls.getAddress() .. h.path, "r")
+                cache.tmpfs.seek(f, "set", h.pointer)
+                local result = cache.tmpfs.read(f, count)
+                cache.tmpfs.close(f)
+                if result then
+                    h.pointer = h.pointer + result:len()
+                end
+                return result
+            end
+        end
         local data = "offset=" .. h.pointer .. "&count=" .. count;
         local result = cls._pri.request("read" .. h.path, data, {}, "POST")
 

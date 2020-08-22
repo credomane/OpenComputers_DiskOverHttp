@@ -27,7 +27,7 @@ Nodejs and npm
 
 ## For Advanced Users
 Assuming you are on an OpenComputer capable of using virtual components.  
-OpenOS is can't by default. You must download a program that can do it for you.  
+OpenOS is capable but can't by default. You must download a program that can add this feature for you.  
 Once you have done that get the /lua/httfs.lua and/or /lua/httpdrv.lua onto your computer.  
 Have a program create a new httpfs and register it like so:
 ```lua 

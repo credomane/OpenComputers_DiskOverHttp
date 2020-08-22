@@ -17,8 +17,6 @@ webapp.use(bodyParser.json());
 let config = JSON.parse(fs.readFileSync(__dirname + "/config/config.json", "utf8"));
 let packagejson = JSON.parse(fs.readFileSync(__dirname + "/package.json", "utf8"));
 
-console.log(packagejson.namePretty, "V" + packagejson.version);
-
 let serverurl;
 let httpPort = config.httpPort;
 let loggingLevel = config.loggingLevel;
@@ -34,7 +32,7 @@ if (config.httpPort === 80 || config.httpPort === 443) {
 //Pre-cache the pieces needed to actually initialize http booting.
 let file_vcomponent = fs.readFileSync(__dirname + "/lua/vcomponent.lua", "utf8");
 let file_bootloader = fs.readFileSync(__dirname + "/lua/bootloader.lua");
-let file_httpfs = fs.readFileSync(__dirname + "/lua/httpfs.new.lua", "utf8");
+let file_httpfs = fs.readFileSync(__dirname + "/lua/httpfs.lua", "utf8");
 let file_httpdrv = fs.readFileSync(__dirname + "/lua/httpdrv.lua", "utf8");
 
 //This is ran everytime :disk is used in the routes.
@@ -528,11 +526,6 @@ webapp.post('/disk/:disk/read*', function (req, res) {
 });
 
 /********************************************
- * Admin Panel
- *******************************************/
-//TODO: make the thing.
-
-/********************************************
  * Catch all Rules
  *******************************************/
 webapp.all("*", function (req, res) {
@@ -543,12 +536,7 @@ webapp.all("*", function (req, res) {
 let websrv = require("http").createServer(webapp).listen(httpPort);
 
 
-/**************************
- * Pterodactyl is weird and won't send ^C to nodejs properly.
- * So I added a graceful stop feature here when "stop" is read on stdin.
- *   --Credo
- **************************/
-function dobotshutdown() {
+function doshutdown() {
     console.log('Terminating!');
     websrv.close();
     process.exit(0);
@@ -556,22 +544,8 @@ function dobotshutdown() {
 
 process.stdin.resume();
 process.on('SIGINT', () => {
-    dobotshutdown();
+    doshutdown();
 });
-const readline = require('readline');
-let rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: false
-});
-
-rl.on('line', function (line) {
-    if (line.startsWith("/")) {
-        if (!Commands.run(line)) {
-            console.warn("unknown command: " + line);
-        }
-    }
-})
 
 /**************************
  * Build up the commands for cli interactions.
@@ -585,7 +559,7 @@ Commands.register({
     "description": "Stops the server",
     "help": "",
     execute(args, params) {
-        dobotshutdown();
+        doshutdown();
     }
 });
 
@@ -596,8 +570,25 @@ for (let file of commandFiles) {
     let command = require(__dirname + "/commands/" + file);
     Commands.register(command);
 }
+
 /**************************
  * Say we are ready so pterodactyl switches from "Starting..." to "Online"
+ * Also setup command parsing
  **************************/
-console.log("Listening on port " + httpPort);
+console.log(packagejson.namePretty, "V" + packagejson.version);
+console.log("Listening on 0.0.0.0:" + httpPort);
 console.log("Ready!");
+
+const readline = require('readline');
+let rl = readline.createInterface(process.stdin, process.stdout);
+
+function readLineLoop() {
+    rl.question('> ', function (cmd) {
+        if (!Commands.run(cmd)) {
+            console.warn("Unknown command: " + cmd);
+        }
+        readLineLoop();
+    });
+}
+
+readLineLoop();

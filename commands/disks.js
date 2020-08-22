@@ -2,7 +2,7 @@ module.exports = {
     "name": "disks",
     "description": "Lists all disks and basic information about them.",
     help(args) {
-        return "";
+        return "Just run the command. No help needed.";
     },
     execute(args, params) {
         if (!params.hasOwnProperty("diskMan")) {
@@ -11,8 +11,8 @@ module.exports = {
             return false;
         }
 
-        let diskMan = params.diskMan;
-        let disks = diskMan.listAll();
+        const diskMan = params.diskMan;
+        const disks = diskMan.listAll();
 
         for (let i = 0; i < disks.length; i++) {
             let disk = disks[i];

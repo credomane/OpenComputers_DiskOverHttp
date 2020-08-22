@@ -21,9 +21,11 @@ create drive <sectorSize> <sectorCount> <platterCount>
             return false;
         }
         if (!args.hasOwnProperty("_") || args._.length < 1) {
-            console.log("Too few args");
+            console.log("A disk UUID is required");
             return false;
         }
+
+        const diskMan = params.diskMan;
         const type = args._[0].toString().toLowerCase();
         if (type === "fs") {
             if (args._.length < 2) {
@@ -39,7 +41,7 @@ create drive <sectorSize> <sectorCount> <platterCount>
                 console.log("SpaceTotal isn't a number");
                 return false;
             }
-            let disk = params.diskMan.createFilesystem(size, "", false);
+            let disk = diskMan.createFilesystem(size, "", false);
 
             if (disk !== false) {
                 console.log("Created new managed disk with uuid " + disk);
@@ -91,7 +93,7 @@ create drive <sectorSize> <sectorCount> <platterCount>
                 return false;
             }
 
-            let disk = params.diskMan.createDrive("", platterCount, sectorSize, sectorCount);
+            let disk = diskMan.createDrive("", platterCount, sectorSize, sectorCount);
             if (disk !== false) {
                 console.log("Created new managed disk with uuid " + disk);
                 return true;

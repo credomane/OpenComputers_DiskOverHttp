@@ -555,7 +555,7 @@ const commandFiles = fs.readdirSync(__dirname + "/commands");
 Commands.addParameter("diskMan", diskMan);
 
 Commands.register({
-    "name": "stop",
+    "name": "/stop",
     "description": "Stops the server",
     "help": "",
     execute(args, params) {

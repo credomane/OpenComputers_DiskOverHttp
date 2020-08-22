@@ -6,7 +6,7 @@ requires some manual copying of files to your created disks first.
 ##Install Requirements
 Nodejs and npm
 
-##How to Install
+## How to Install
 1. Read the "How to use" section first.
 1. Download OC Disks over HTTP 
 1. Run `npm install` to fetch dependencies
@@ -14,7 +14,7 @@ Nodejs and npm
 1. Edit /config/config.json to desired settings.
 1. Run `node index` to launch the server
 
-##How to Use
+## How to Use
 1. Once the server is launched use the built-in cli to create disks.
 1. Use commands "list" and "help" to get started.
 1. In minecraft use an EEPROM capable of http booting (internet card required too). [Provided by TitanBIOS.lua in the lua directory.]
@@ -25,7 +25,7 @@ Nodejs and npm
 1. The server cli should, depending on your log level, start spamming messages to the console.
 
 
-##For Advanced Users
+## For Advanced Users
 Assuming you are on an OpenComputer capable of using virtual components.  
 OpenOS is can't by default. You must download a program that can do it for you.  
 Once you have done that get the /lua/httfs.lua and/or /lua/httpdrv.lua onto your computer.  

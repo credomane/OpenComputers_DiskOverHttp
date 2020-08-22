@@ -1,21 +1,16 @@
-
---[[Due to the OC Internet Card call budgets this current design is *extremely inefficient.
-    Originally designed to work like the httpfs but that needs to change.
-    httpfs work more like a NFS where 1 or many computers can use it at the same time.
-    httpdrv can't work like that since it isn't a filesystem at all. Just raw access to a single "file".
-    I won't stop you if you really want to use httpdrv on many systems at once but YMMV.
-    So here is the TODO to patch this up:
-    1. Create a single sector cache
-    2. make readByte/writeByte piggy back of their sector siblings
-
-    For 2 to happen the byte functions need to convert their absolute offset into a
---]]
-
 local function httpdrv(address, server)
     local cls = {}
     cls._pri = {}
     cls._pri.address = address
     cls._pri.server = server
+    cls._pri.sectorSize = nil
+    cls._pri.capacity = nil
+    cls._pri.platterCount = nil
+
+    local cache = {}
+    cache.enabled = true;
+    cache.sector = nil;
+    cache.sectorData = nil;
 
     function cls._pri.request(path, value, headers, method)
         local req = ci(cl("internet", true)(), "request", cls._pri.server .. "disk/" .. cls._pri.address .. "/" .. path, value, headers, method)
@@ -41,16 +36,25 @@ local function httpdrv(address, server)
         return cls._pri.address
     end
 
-    function cls.readByte(offset)
-        return tonumber(cls._pri.request("readbyte/" .. offset))
-    end
-
-    function cls.writeByte(offset, value)
-        return toboolean(cls._pri.request("writebyte/" .. offset, { byte = value }, {}, "post"))
-    end
-
     function cls.getSectorSize()
-        return tonumber(cls._pri.request("sectorsize"))
+        if cls._pri.sectorSize == nil then
+            cls._pri.sectorSize = tonumber(cls._pri.request("sectorsize"))
+        end
+        return cls._pri.sectorSize
+    end
+
+    function cls.getPlatterCount()
+        if cls._pri.platterCount == nil then
+            cls._pri.platterCount = tonumber(cls._pri.request("plattercount"))
+        end
+        return cls._pri.platterCount
+    end
+
+    function cls.getCapacity()
+        if cls._pri.capacity == nil then
+            cls._pri.capacity = tonumber(cls._pri.request("capacity"))
+        end
+        return cls._pri.capacity
     end
 
     function cls.getLabel()
@@ -62,19 +66,54 @@ local function httpdrv(address, server)
     end
 
     function cls.readSector(sector)
-        return tonumber(cls._pri.request("readsector/" .. sector))
+        if cache.enabled then
+            if cache.sector ~= sector then
+                cache.sectorData = cls._pri.request("readsector/" .. sector)
+                cache.sector = sector
+            end
+            return cache.sectorData
+        end
+        return cls._pri.request("readsector/" .. sector)
     end
 
     function cls.writeSector(sector, value)
-        return toboolean(cls._pri.request("writesector/" .. offset, { data = value }, {}, "post"))
+        return toboolean(cls._pri.request("writesector/" .. sector, { data = value }, {}, "post"))
     end
 
-    function cls.getPlatterCount()
-        return tonumber(cls._pri.request("plattercount"))
+    function cls.readByte(offset)
+        --readByte actually reads a sector to cache then reads bytes from that cache.
+        --When sector boundaries are crossed the cached sector is swapped.
+        local sector = math.floor(offset / this.getSectorSize());
+        local sectorOffset = offset % sector;
+        if cache.enabled then
+            local sectorData
+            if cache.sector ~= sector then
+                sectorData = cls.readSector(sector);
+            end
+
+            return sectorData:sub(sectorOffset, sectorOffset);
+        end
+
+        return cls._pri.request("readbyte/" .. offset)
     end
 
-    function cls.getCapacity()
-        return tonumber(cls._pri.request("spacetotal"))
+    function cls.writeByte(offset, value)
+        --Sadly since we don't want to desync because of a reboot/shutdown we need to send every write to the http server.
+        --This forces writeByte to be always be slow.
+        local sector = math.floor(offset / this.getSectorSize());
+        local sectorOffset = offset % sector;
+        if cache.enabled then
+            if cache.sector ~= sector then
+                cache.sectorData = cls.readSector(sector);
+                cache.sector = sector
+            end
+
+            cache.sectorData = table.concat({ cache.sectorData:sub(1, sectorOffset - 1), value, cache.sectorData:sub(sectorOffset + 1) })
+            return toboolean(cls.writeSector(sector, cache.sectorData))
+        end
+
+        return toboolean(cls._pri.request("writebyte/" .. offset, { byte = value }, {}, "post"))
     end
+
     return cls
 end

@@ -3,7 +3,7 @@ This an experiment with booting OpenComputers over the Internet, specifically ht
 It is still rough around the edges. Setup is easy but booting your first disk isn't as it 
 requires some manual copying of files to your created disks first. 
 
-##Install Requirements
+## Install Requirements
 Nodejs and npm
 
 ## How to Install

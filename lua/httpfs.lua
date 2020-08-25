@@ -28,7 +28,7 @@ local function httpfs(address, server)
     if (computer.tmpAddress() ~= nil) then
         cache.tmpfs = cp(computer.tmpAddress());
         cache.size = math.floor(cache.tmpfs.spaceTotal() * 0.25)
-        cache.enabled = true;
+        cache.enabled = false; --Disabling caching for now. There is a magic 0/1 bug somewhere.
         if cache.tmpfs.exists(cache.path .. address) then
             cache.tmpfs.remove(cache.path .. address)
         end

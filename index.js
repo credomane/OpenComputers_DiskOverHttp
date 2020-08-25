@@ -51,12 +51,13 @@ webapp.param("disk", function (req, res, next, value) {
     next();
 });
 
-// /boot/ is for initializing the boot over http.
+// /boot/ is for any OS that incapable of setting up the httpfs/httpdrv themselves
+//  and just expects the fs/drive to be there already (OpenOS for example)
 // This is done by sending a few different files and pieces as single stream of data.
 // 1. vcomponent (author: gamax92 https://github.com/OpenPrograms/gamax92-Programs) slightly modified for use without OpenOS.
 // 2. Bootloader (author: credomane) Handles getting the first file off httpfs or reading the MBR on httpdrv.
 // 3. httpfs/httpdrv (author: credomane) The heart of this project.
-// 4. Some fileless lua to handle getting the ducks in line so virtual disk can be booted.
+// 4. Some fileless lua to handle getting the ducks in line so virtual disk is mounted and can be booted.
 webapp.get('/boot/:disk*', function (req, res) {
     let fstype = "";
     let disk = req.params.disk.toLowerCase();
@@ -64,9 +65,9 @@ webapp.get('/boot/:disk*', function (req, res) {
     let stuff = "";
 
     if (diskMan.isManaged(disk)) {
-        fstype = "httpfs"
+        fstype = "httpfs";
     } else {
-        fstype = "httpdrv"
+        fstype = "httpdrv";
     }
 
     stuff += "--vcomponent.lua\n" + file_vcomponent + "\n";
@@ -95,6 +96,41 @@ webapp.get('/boot/:disk*', function (req, res) {
 
     console.info(disk, "Sending bootcode for", "'" + fstype + "'");
     res.type("application/lua").send("" + stuff).end();
+});
+
+//This is for OS's that can handle http boot up itself.
+//Or one that just wants to lazy read files off the filesystem
+webapp.get('/get/:disk*', function (req, res) {
+    let disk = req.params.disk.toLowerCase();
+    let file = req.params[0];
+
+    if (!diskMan.isManaged(disk)) {
+        console.error(disk, "Can't /get/ on unmanaged drives");
+        res.status(404).end();
+        return;
+    }
+
+    let diskObj = diskMan.loadFilesystem(disk);
+
+    if (!diskObj.exists(file)) {
+        console.error(disk, "Can't /get/ a file that doesn't exist");
+        res.status(404).end();
+    }
+
+    if (!diskObj.isDirectory(file)) {
+        console.error(disk, "Can't /get/ a directory");
+        res.status(404).end();
+    }
+
+    let result = diskObj.read(file, diskObj.size(file), 0);
+    if (result < 0) {
+        result = null;
+        console.fail(disk, "read", file, result);
+    } else {
+        console.ok(disk, "read", file, result.length + " bytes.");
+    }
+    console.info(disk, "Sending file '" + file + "'");
+    res.type("application/lua").send("" + result).end();
 });
 
 /***************************************
@@ -575,7 +611,9 @@ for (let file of commandFiles) {
  * Say we are ready so pterodactyl switches from "Starting..." to "Online"
  * Also setup command parsing
  **************************/
-console.log(packagejson.namePretty, "V" + packagejson.version);
+console.log(packagejson.namePretty + " V" + packagejson.version);
+console.log("Using NodeJS " + process.version);
+
 console.log("Listening on 0.0.0.0:" + httpPort);
 console.log("Ready!");
 

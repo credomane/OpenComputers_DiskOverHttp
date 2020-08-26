@@ -205,7 +205,13 @@ webapp.get('/disk/:disk/sectorsize', function (req, res) {
 
 webapp.get('/disk/:disk/readbyte/:offset', function (req, res) {
     let disk = req.params.disk.toLowerCase();
-    let offset = req.params.offset;
+    let offset = parseInt(req.params.offset);
+
+    if(isNaN(offset)){
+        console.error(disk, "writeByte", "Offset is NaN.");
+        res.status(404).send(ec.nan).end();
+        return;
+    }
 
     if (diskMan.isManaged(disk)) {
         console.error(disk, "readByte", "Attempted to read a byte on managed disk.");
@@ -220,8 +226,14 @@ webapp.get('/disk/:disk/readbyte/:offset', function (req, res) {
 
 webapp.post('/disk/:disk/writebyte/:offset', function (req, res) {
     let disk = req.params.disk.toLowerCase();
-    let offset = req.params.offset;
+    let offset = parseInt(req.params.offset);
     let data = req.body.data
+
+    if(isNaN(offset)){
+        console.error(disk, "writeByte", "Offset is NaN.");
+        res.status(404).send(ec.nan).end();
+        return;
+    }
 
     if (diskMan.isManaged(disk)) {
         console.error(disk, "writeByte", "Attempted to write a byte on managed disk.");
@@ -237,7 +249,13 @@ webapp.post('/disk/:disk/writebyte/:offset', function (req, res) {
 
 webapp.get('/disk/:disk/readsector/:sector', function (req, res) {
     let disk = req.params.disk.toLowerCase();
-    let sector = req.params.sector;
+    let sector = parseInt(req.params.sector);
+
+    if(isNaN(sector)){
+        console.error(disk, "writeByte", "Sector is NaN.");
+        res.status(404).send(ec.nan).end();
+        return;
+    }
 
     if (diskMan.isManaged(disk)) {
         console.error(disk, "readSector", "Attempted to read a sector on managed disk.");
@@ -252,8 +270,14 @@ webapp.get('/disk/:disk/readsector/:sector', function (req, res) {
 
 webapp.post('/disk/:disk/writesector/:sector', function (req, res) {
     let disk = req.params.disk.toLowerCase();
-    let sector = req.params.sector;
+    let sector = parseInt(req.params.sector);
     let data = req.body.data
+
+    if(isNaN(sector)){
+        console.error(disk, "writeByte", "Sector is NaN.");
+        res.status(404).send(ec.nan).end();
+        return;
+    }
 
     if (diskMan.isManaged(disk)) {
         console.error(disk, "writeSector", "Attempted to write a sector on managed disk.");
@@ -378,8 +402,14 @@ webapp.get('/disk/:disk/exists*', function (req, res) {
 webapp.post('/disk/:disk/write*', function (req, res) {
     let disk = req.params.disk.toLowerCase();
     let file = req.params[0];
-    let offset = req.body.offset;
+    let offset = parseInt(req.body.offset);
     let data = req.body.data;
+
+    if(isNaN(offset)){
+        console.error(disk, "write", "Offset is NaN.");
+        res.status(404).send(ec.nan).end();
+        return;
+    }
 
     if (!diskMan.isManaged(disk)) {
         console.error(disk, "write", "Attempted to write to a file on unmanaged disk.");
@@ -542,6 +572,12 @@ webapp.post('/disk/:disk/read*', function (req, res) {
     let file = req.params[0];
     let offset = parseInt(req.body.offset);
     let count = req.body.count;
+
+    if(isNaN(offset)){
+        console.error(disk, "write", "Offset is NaN.");
+        res.status(404).send(ec.nan).end();
+        return;
+    }
 
     if (!diskMan.isManaged(disk)) {
         console.error(disk, "read", "Attempted to read a file on unmanaged disk.");

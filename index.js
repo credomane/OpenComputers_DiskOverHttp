@@ -420,7 +420,7 @@ webapp.post('/disk/:disk/write*', function (req, res) {
 
 
     let result = diskObj.write(file, data, offset);
-    if (result > 0) {
+    if (result < 0) {
         console.fail(disk, "write", file, result);
     } else {
         console.ok(disk, "write", file, result + " bytes");

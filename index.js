@@ -207,7 +207,7 @@ webapp.get('/disk/:disk/readbyte/:offset', function (req, res) {
     let disk = req.params.disk.toLowerCase();
     let offset = parseInt(req.params.offset);
 
-    if(isNaN(offset)){
+    if (isNaN(offset)) {
         console.error(disk, "writeByte", "Offset is NaN.");
         res.status(404).send(ec.nan).end();
         return;
@@ -229,7 +229,7 @@ webapp.post('/disk/:disk/writebyte/:offset', function (req, res) {
     let offset = parseInt(req.params.offset);
     let data = req.body.data
 
-    if(isNaN(offset)){
+    if (isNaN(offset)) {
         console.error(disk, "writeByte", "Offset is NaN.");
         res.status(404).send(ec.nan).end();
         return;
@@ -251,7 +251,7 @@ webapp.get('/disk/:disk/readsector/:sector', function (req, res) {
     let disk = req.params.disk.toLowerCase();
     let sector = parseInt(req.params.sector);
 
-    if(isNaN(sector)){
+    if (isNaN(sector)) {
         console.error(disk, "writeByte", "Sector is NaN.");
         res.status(404).send(ec.nan).end();
         return;
@@ -273,7 +273,7 @@ webapp.post('/disk/:disk/writesector/:sector', function (req, res) {
     let sector = parseInt(req.params.sector);
     let data = req.body.data
 
-    if(isNaN(sector)){
+    if (isNaN(sector)) {
         console.error(disk, "writeByte", "Sector is NaN.");
         res.status(404).send(ec.nan).end();
         return;
@@ -404,8 +404,9 @@ webapp.post('/disk/:disk/write*', function (req, res) {
     let file = req.params[0];
     let offset = parseInt(req.body.offset);
     let data = req.body.data;
+    let mode = req.body.mode;
 
-    if(isNaN(offset)){
+    if (isNaN(offset)) {
         console.error(disk, "write", "Offset is NaN.");
         res.status(404).send(ec.nan).end();
         return;
@@ -419,7 +420,7 @@ webapp.post('/disk/:disk/write*', function (req, res) {
     let diskObj = diskMan.loadFilesystem(disk);
 
 
-    let result = diskObj.write(file, data, offset);
+    let result = diskObj.write(file, data, offset, mode);
     if (result < 0) {
         console.fail(disk, "write", file, result);
     } else {
@@ -573,7 +574,7 @@ webapp.post('/disk/:disk/read*', function (req, res) {
     let offset = parseInt(req.body.offset);
     let count = req.body.count;
 
-    if(isNaN(offset)){
+    if (isNaN(offset)) {
         console.error(disk, "write", "Offset is NaN.");
         res.status(404).send(ec.nan).end();
         return;

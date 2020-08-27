@@ -93,7 +93,9 @@ local function httpfs(address, server)
 
         cls._pri.nextHandle = cls._pri.nextHandle + 1
 
-
+        if (mode == "a" or mode == "a+") and size > 0 then
+            cls._pri.handles[handle].pointer = size - 4; --minus 4 because nodejs is being retarded
+        end
         --If it is not a pure read only operation force remove the file from cache!
         if mode ~= "r" then
             if cache.enabled and cache.files[path] and cache.tmpfs.exists(cache.path .. cls.getAddress() .. path) then
@@ -170,7 +172,7 @@ local function httpfs(address, server)
         valenc = valenc:gsub("([^%w ])", char_to_hex)
         valenc = valenc:gsub(" ", "+")
 
-        local data = "offset=" .. h.pointer .. "&data=" .. valenc;
+        local data = "offset=" .. h.pointer .. "&mode=" .. h.mode .. "&data=" .. valenc;
 
         return toboolean(cls._pri.request("write" .. h.path, data, {}, "POST"))
     end

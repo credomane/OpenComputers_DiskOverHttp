@@ -1,15 +1,14 @@
 {
-  "name": "opencomputersdiskoverhttp",
-  "namePretty": "OpenComputers Disk over HTTP",
+  "name": "opencomputersdiskoverinternet",
+  "namePretty": "OpenComputers Disk over Internet",
   "version": "0.9.9",
-  "description": "Open Computer disks over HTTP",
+  "description": "Open Computer disks over Internet",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "express": "^4.17.1",
     "minimist": "^1.2.5",
     "uuid": "^8.3.0"
   }

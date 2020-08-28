@@ -1,4 +1,4 @@
 /.idea/
-/node_modules/
-/config/
-/disks/
+/src/node_modules/
+/src/config/
+/src/disks/

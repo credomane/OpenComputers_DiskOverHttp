@@ -1,9 +1,6 @@
---Note these two shorthands are used by the httpfs.lua and httpdrv.lua
---Figured save the space since they all get concatenated together anyways.
---And we want to make them after vcomponent.lua takes them over.
 local cl, ci, cp = component.list, component.invoke, component.proxy;
 
-local function bootdisk(disk, file)
+local function bootfs(disk, file)
     for address in cl("filesystem", true) do
         if address == disk then
             local handle, reason = ci(address, "open", file)
@@ -22,7 +19,7 @@ local function bootdisk(disk, file)
                 end
                 code = code .. data
             end
-            local init, reason = load(code, "=httpfs.init.lua")
+            local init, reason = load(code, "="..file)
             if not init then
                 error(reason, 0)
             end
@@ -49,7 +46,7 @@ local function bootdrive(drive)
 
             code = code:sub(1, 512);
 
-            local init, reason = load(code, "=httpdrv.init.lua")
+            local init, reason = load(code, "=bootdrive")
             if not init then
                 error(reason, 0)
             end

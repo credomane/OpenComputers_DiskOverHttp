@@ -151,6 +151,11 @@ function PacketDeserializer(packet) {
     let packetBuffer = Buffer.from(packet);
     let packetOffset = 0;
 
+    //Empty packet check
+    if (packetBuffer.length === 0) {
+        return {};
+    }
+
     let loadRaw = function (length) {
         let tmp = packetBuffer.slice(packetOffset, packetOffset + length);
         packetOffset += length;

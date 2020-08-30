@@ -5,7 +5,7 @@ const OCdisk = require("./lib/OCDisk");
 const ec = require("./lib/ErrorCodes");
 const ConsoleHijack = require("./lib/ConsoleHijack");
 const Commands = require("./lib/Commands");
-const opCode = require("./lib/opCode")
+const OPS = require("./lib/opCode")
 const packet = require("./lib/packet")
 
 let diskMan = new OCdisk(__dirname + "/disks/");
@@ -35,37 +35,110 @@ server.listen(serverport, "0.0.0.0", function () {
 });
 
 server.on('connection', function (socket) {
-
     const client = {};
     client.addr = socket.remoteAddress + ":" + socket.remotePort.toString();
-    client.data = {};//Holds all data created and used by opCodes for this connection.
-    client.data.custom = {};//OpCodes should make subtables as needed
-    client.data.fileHandles = {};//Holds all active handles to files opened by opCodes. Needed for when a socket closes so they can be cleaned up properly.
-
     client.opcode = 0;//0=no opcode (NULL)
     client.totalSize = 0;
     client.size = 0;
 
-    console.log(client.addr + " is a new client.");
+    const consolelog = function () {
+        console.log(client.addr, ...arguments)
+    }
+    consolelog("is a new client.");
+
+    const opParams = {}
+    opParams.customData = {};//OpCodes should make subtables as needed
+    opParams.fileHandles = {};//Holds all active handles to files opened by opCodes. Needed for when a socket closes so they can be cleaned up properly.
+
+    //Packages and sends off a packet to the client.
+    const sendPacket = function (opcode, args) {
+        const packet = packet.serialize(args)
+        const header = Buffer.allocUnsafe(4);
+        header.writeUInt16LE(packet.length + 2);
+        header.writeUInt16LE(opcode, 2);
+        socket.write(Buffer.concat([header, packet]));
+    }
+
+    //Holds all the incoming package data. Gets "resized" as more data arrives/parsed.
+    let packetChunks = Buffer.alloc(0);
+    /**
+     * @return Boolean|Object   OBJECT is present with valid packet or FALSE.
+     */
+    const parsePacket = function () {
+        //Putting these in vars isn't needed but helps make sense of all the random numbers.
+        let sizePacketLength = 2;
+        let sizeOpCode = 2;
+        let sizeHeader = sizePacketLength + sizeOpCode;
+        let offsetPacketLength = 0;
+        let offsetOpCode = 2;
+        let offsetPacketData = 4;
+
+
+        if (packetChunks.length < sizePacketLength) {
+            return false;//Packet isn't even long enough to get a total length, yet.
+        }
+        let packetLength = packetChunks.readUInt16LE(offsetPacketLength);
+        if (packetChunks.length < packetLength) {
+            return false;//Packet is still missing data.
+        }
+        if (packetLength - sizeHeader < 0) {
+            //Fubar packet. The other end is talking crazy... Just slam the door in their face!
+            // They'll get the picture or they won't. Not my problem anymore.
+            consolelog("sent a Fubar packet. Hanging up");
+            socket.end()
+            return false;
+        }
+
+        //Supposedly a valid packet. Remove the packet from the packetChunks.
+        const packetData = Buffer.alloc(packetLength - sizeHeader, 0);
+        let opcode = packetChunks.readUInt16LE(offsetOpCode);
+        packetChunks.copy(packetData, 0, offsetPacketData, packetLength);
+        const tmp_packetChunks = Buffer.alloc(packetChunks.length - packetLength, 0);
+        packetChunks.copy(tmp_packetChunks, 0, packetLength);
+        packetChunks = tmp_packetChunks;
+
+        let ret = {};
+        ret.opcode = opcode;
+        ret.data = packet.deserialize(packetData);
+        return ret;
+    }
+
+    const opCode = new OPS(__dirname + "/lib/opCodes", socket)
+    opCode.addParameter("ops", opCode);
+    opCode.addParameter("socket", socket);
+    opCode.addParameter("diskMan", diskMan);
+    opCode.addParameter("data", opParams.customData);
+    opCode.addParameter("files", opParams.fileHandles);
+    opCode.addParameter("sendPacket", sendPacket);
+    opCode.addParameter("consolelog", consolelog);
 
     socket.on('data', function (chunk) {
+        packetChunks = Buffer.concat([packetChunks, chunk]);
+        let packet;
+        while ((packet = parsePacket()) !== false) {
+            if (packet === true) {
+                console.log("Got an empty packet.");
+                continue;
+            }
+            consolelog("Sent a PACKET!", packet);
+        }
+        return;
         let tmp = "";
-        console.log(chunk);
         if (client.opcode === 0) {
             client.opcode = chunk.readUInt16LE(0);
             client.totalSize = chunk.readUInt16LE(2);
 
-            if (client.opcode !== opCode.getByName("hello")) {//First packet must be hello.
+            if (client.opcode !== opCode.byName("hello")) {//First packet must be hello.
                 console.log(client.addr + " didn't send hello. Good-Bye");
                 console.log(typeof client.opcode);
-                console.log(typeof opCode.getByName("hello"));
-                socket.write(opCode.getByName("bye").toString())
+                console.log(typeof opCode.byName("hello"));
+                socket.write(opCode.byName("bye").toString())
                 socket.end();
                 return;
             }
 
             if (client.totalSize > 131072) {//128KB should be enough for anybody in a "single" packet.
-                socket.write(opCode.getByName("bye").toString())
+                socket.write(opCode.byName("bye").toString())
                 socket.end();
                 return;
             }
@@ -78,18 +151,19 @@ server.on('connection', function (socket) {
         client.size += tmp.length;
         //This needs improved. If the client sends multiple packets that get lumped together this will trigger "falsely".
         if (client.size > client.totalSize) {
-            socket.write(opCode.getByName("bye").toString())
+            socket.write(opCode.byName("bye").toString())
             socket.end()
         }
         tmp.copy(client.buf, client.size - tmp.length);
         if (client.size === client.totalSize) {
-            console.log(client.addr + ": Full packet received. Calling opcode " + opCode.getByCode(client.opcode));
+            console.log(client.addr + ": Full packet received. Calling opcode " + opCode.byCode(client.opcode));
             let parsedData = packet.deserialize(client.buf)
             console.log(parsedData);
             //call opCode(data)
-            if (!opCode.run(client.opcode, socket, parsedData, client.data.custom, client.data.fileHandles)) {
+            if (!opCode.run(client.opcode, parsedData)) {
                 console.warn("Unknown opCode: " + client.opcode);
             }
+            //Reset the incoming packet data.
             client.opcode = 0;
             client.size = 0;
             client.totalSize = 0;
@@ -108,7 +182,6 @@ server.on('connection', function (socket) {
     });
 });
 
-
 function doshutdown() {
     console.log('Terminating!');
     server.close();
@@ -119,21 +192,6 @@ process.stdin.resume();
 process.on('SIGINT', () => {
     doshutdown();
 });
-
-/**************************
- * Register all of the OPS (PacketHandlers)
- **************************/
-const opCodeFiles = fs.readdirSync(__dirname + "/lib/opCodes");
-
-opCode.addParameter("diskMan", diskMan);
-
-for (let file of opCodeFiles) {
-    if (!file.endsWith(".js")) {
-        continue;
-    }
-    let command = require(__dirname + "/lib/opCodes/" + file);
-    opCode.register(command);
-}
 
 /**************************
  * Build up the commands for cli interactions.

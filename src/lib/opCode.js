@@ -1,72 +1,83 @@
-const OpCode = {};
+"use strict";
 
-let myOPS = {};
-let myParameters = {};
+const fs = require("fs");
 
-OpCode.getByName = function (op) {
-    for (let opCode in myOPS) {
-        if (op.toLowerCase() === myOPS[opCode].name.toLowerCase()) {
-            return parseInt(opCode);
+class OpCode {
+    constructor(opCodeLocation) {
+        const opCodeFiles = fs.readdirSync(opCodeLocation);
+
+        this.ops = {};
+        this.params = {};
+
+        for (let file of opCodeFiles) {
+            if (!file.endsWith(".js")) {
+                continue;
+            }
+            let command = require(opCodeLocation + "/" + file);
+            this.register(command);
         }
     }
-    return "";
-};
 
-OpCode.getByCode = function (op) {
-    if (myOPS.hasOwnProperty(op) && myOPS[op].hasOwnProperty("name")) {
-        return myOPS[op].name;
+    getByName = function (op) {
+        for (let opCode in this.ops) {
+            if (op.toLowerCase() === this.ops[opCode].name.toLowerCase()) {
+                return parseInt(opCode);
+            }
+        }
+        return "";
+    };
+
+    getByCode = function (op) {
+        if (this.ops.hasOwnProperty(op) && this.ops[op].hasOwnProperty("name")) {
+            return this.ops[op].name;
+        }
+        return false;
+    };
+
+    run = function (opcode, args) {
+        if (this.ops.hasOwnProperty(opcode) && typeof (this.ops[opcode].execute) === "function") {
+            this.ops[opcode].execute.call(this.params, args);
+            return true;
+        }
+        return false;
     }
-    return false;
-};
 
-OpCode.run = function (opcode, socket, args, custom, fileHandles) {
-    let params = {};
-    //Make a copy. We don't want ops deleting parameters for future op calls.
-    Object.assign(params, myParameters);
-
-    if (myOPS.hasOwnProperty(opcode) && typeof (myOPS[opcode].execute) === "function") {
-        myOPS[opcode].execute(socket, args, custom, fileHandles, params);
-        return true;
+    register = function (op) {
+        const opName = op.name.toLowerCase()
+        const opCode = op.opCode;
+        if (!this.ops.hasOwnProperty(opCode)) {
+            this.ops[opCode] = op;
+            return true;
+        }
+        console.log(opName + " wants opCode " + opCode + " but it is already taken by " + this.ops[opCode].name);
+        return false;
     }
-    return false;
+
+
+    unregister = function (op) {
+        if (typeof (op) === "number" && this.ops.hasOwnProperty(op)) {
+            delete this.ops[op];
+            return true;
+        }
+        return false;
+    }
+
+    addParameter = function (name, value) {
+        if (!this.params.hasOwnProperty(name)) {
+            this.params[name] = value;
+            return true;
+        }
+        return false;
+    }
+
+    removeParameter = function (name) {
+        if (this.params.hasOwnProperty(name)) {
+            delete this.params[name];
+            return true;
+        }
+        return false;
+    }
+
 }
-
-OpCode.register = function (op) {
-    const opName = op.name.toLowerCase()
-    const opCode = op.opCode;
-    if (!myOPS.hasOwnProperty(opCode)) {
-        myOPS[opCode] = op;
-        return true;
-    }
-    console.log(opName + " wants opCode " + opCode + " but it is already taken by " + myOPS[opCode].name);
-    return false;
-}
-
-
-OpCode.unregister = function (op) {
-    if (typeof (op) === "number" && myOPS.hasOwnProperty(op)) {
-        delete myOPS[op];
-        return true;
-    }
-    return false;
-}
-
-OpCode.addParameter = function (name, value) {
-    if (!myParameters.hasOwnProperty(name)) {
-        myParameters[name] = value;
-        return true;
-    }
-    return false;
-}
-
-OpCode.removeParameter = function (name) {
-    if (myParameters.hasOwnProperty(name)) {
-        delete myParameters[name];
-        return true;
-    }
-    return false;
-}
-
-OpCode.addParameter("ops", OpCode);
 
 module.exports = OpCode;

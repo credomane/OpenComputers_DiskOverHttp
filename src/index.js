@@ -1,5 +1,6 @@
 const fs = require("fs");
 const net = require("net");
+const luamin = require("luamin")
 
 const OCdisk = require("./lib/OCDisk");
 const ec = require("./lib/ErrorCodes");
@@ -19,11 +20,24 @@ let loggingLevel = config.loggingLevel;
 
 ConsoleHijack(loggingLevel);
 
-//Pre-cache the pieces needed to actually initialize http booting.
-let file_vcomponent = fs.readFileSync(__dirname + "/lua/vcomponent.lua", "utf8");
-let file_bootloader = fs.readFileSync(__dirname + "/lua/bootloader.lua");
-let file_inetfs = fs.readFileSync(__dirname + "/lua/inetfs.lua", "utf8");
-let file_inetdrv = fs.readFileSync(__dirname + "/lua/inetdrv.lua", "utf8");
+//Pre-cache the pieces needed to actually initialize booting over and Internet socket.
+let luaBootFiles = [];
+luaBootFiles[luaBootFiles.length] = fs.readFileSync(__dirname + "/lua/bootloader.lua", "utf8");
+luaBootFiles[luaBootFiles.length] = fs.readFileSync(__dirname + "/lua/vcomponent.lua", "utf8");
+luaBootFiles[luaBootFiles.length] = fs.readFileSync(__dirname + "/lua/packet.lua", "utf8");
+luaBootFiles[luaBootFiles.length] = fs.readFileSync(__dirname + "/lua/inetfs.lua", "utf8");
+luaBootFiles[luaBootFiles.length] = fs.readFileSync(__dirname + "/lua/inetdrv.lua", "utf8");
+
+//Pre-cache all opCodes
+const opCodeLocation = __dirname + "/lib/opCodes/";
+const opCodeCache = [];
+const opCodeFiles = fs.readdirSync(opCodeLocation);
+for (let file of opCodeFiles) {
+    if (!file.endsWith(".js")) {
+        continue;
+    }
+    opCodeCache[opCodeCache.length] = require(opCodeLocation + file);
+}
 
 /**************************
  * Setup the socket server and related handlers.
@@ -36,31 +50,51 @@ server.listen(serverport, "0.0.0.0", function () {
 
 server.on('connection', function (socket) {
     const client = {};
-    client.addr = socket.remoteAddress + ":" + socket.remotePort.toString();
-    client.opcode = 0;//0=no opcode (NULL)
-    client.totalSize = 0;
-    client.size = 0;
+    client.addr = socket.remoteAddress;
+    client.port = socket.remotePort.toString();
+    client.socket = socket;
+    client.customData = {};//OpCodes should make subtables as needed
+    client.fileHandles = {};//Holds all active handles to files opened by opCodes. Needed for when a socket closes so they can be cleaned up properly.
 
+    //The hello packet with version info and such needs to be sent first!
+    let needHello = true;
+    //Need this because bunch of small packets can get processed before the socket actually closes.
+    let socketOK = true;
+    //Holds all the incoming package data. Gets "resized" as more data arrives/parsed.
+    let packetChunks = Buffer.alloc(0);
+
+    /**
+     * Same as console.log but everything is prepended with this client's address + port.
+     */
     const consolelog = function () {
-        console.log(client.addr, ...arguments)
+        console.log(client.addr + ":" + client.port, ...arguments)
     }
     consolelog("is a new client.");
 
-    const opParams = {}
-    opParams.customData = {};//OpCodes should make subtables as needed
-    opParams.fileHandles = {};//Holds all active handles to files opened by opCodes. Needed for when a socket closes so they can be cleaned up properly.
+    /**
+     * Just blindly close them all asynchronously with a dummy function.
+     */
+    const closeAllFiles = function () {
+        consolelog("is gone. Closing any open files...");
+        for (let handle of client.fileHandles) {
+            fs.close(handle, function () {
+            });
+        }
+    }
 
-    //Packages and sends off a packet to the client.
+    /**
+     * Packages and sends off a packet to the client.
+     */
     const sendPacket = function (opcode, args) {
         const packet = packet.serialize(args)
         const header = Buffer.allocUnsafe(4);
         header.writeUInt16LE(packet.length + 2);
         header.writeUInt16LE(opcode, 2);
-        socket.write(Buffer.concat([header, packet]));
+        socket.write(header);
+        socket.write(packet);
     }
 
-    //Holds all the incoming package data. Gets "resized" as more data arrives/parsed.
-    let packetChunks = Buffer.alloc(0);
+
     /**
      * @return Boolean|Object   OBJECT is present with valid packet or FALSE.
      */
@@ -103,81 +137,46 @@ server.on('connection', function (socket) {
         return ret;
     }
 
-    const opCode = new OPS(__dirname + "/lib/opCodes", socket)
-    opCode.addParameter("ops", opCode);
-    opCode.addParameter("socket", socket);
-    opCode.addParameter("diskMan", diskMan);
-    opCode.addParameter("data", opParams.customData);
-    opCode.addParameter("files", opParams.fileHandles);
+    const opCode = new OPS(opCodeCache);
+    opCode.addParameter("client", client);
+    opCode.addParameter("data", client.customData);//Pass this in direct.
+    opCode.addParameter("files", client.fileHandles);//Pass this in direct.
+    opCode.addParameter("ops", opCode);//For some fancy opcode the needs to call another opcode.
+    opCode.addParameter("diskMan", diskMan);//For OCDisk opcodes.
     opCode.addParameter("sendPacket", sendPacket);
     opCode.addParameter("consolelog", consolelog);
 
     socket.on('data', function (chunk) {
         packetChunks = Buffer.concat([packetChunks, chunk]);
         let packet;
-        while ((packet = parsePacket()) !== false) {
+        while ((packet = parsePacket()) !== false && socketOK) {
             if (packet === true) {
                 console.log("Got an empty packet.");
                 continue;
             }
             consolelog("Sent a PACKET!", packet);
-        }
-        return;
-        let tmp = "";
-        if (client.opcode === 0) {
-            client.opcode = chunk.readUInt16LE(0);
-            client.totalSize = chunk.readUInt16LE(2);
-
-            if (client.opcode !== opCode.byName("hello")) {//First packet must be hello.
-                console.log(client.addr + " didn't send hello. Good-Bye");
-                console.log(typeof client.opcode);
-                console.log(typeof opCode.byName("hello"));
-                socket.write(opCode.byName("bye").toString())
+            if (needHello && client.opcode !== opCode.getByName("hello")) {
+                consolelog("First packet wasn't a hello! Hanging up.");
+                socketOK = false;
                 socket.end();
                 return;
             }
-
-            if (client.totalSize > 131072) {//128KB should be enough for anybody in a "single" packet.
-                socket.write(opCode.byName("bye").toString())
-                socket.end();
-                return;
-            }
-
-            client.buf = Buffer.alloc(client.totalSize, 0);
-            tmp = chunk.slice(4);
-        } else {
-            tmp = chunk;
-        }
-        client.size += tmp.length;
-        //This needs improved. If the client sends multiple packets that get lumped together this will trigger "falsely".
-        if (client.size > client.totalSize) {
-            socket.write(opCode.byName("bye").toString())
-            socket.end()
-        }
-        tmp.copy(client.buf, client.size - tmp.length);
-        if (client.size === client.totalSize) {
-            console.log(client.addr + ": Full packet received. Calling opcode " + opCode.byCode(client.opcode));
-            let parsedData = packet.deserialize(client.buf)
-            console.log(parsedData);
-            //call opCode(data)
-            if (!opCode.run(client.opcode, parsedData)) {
+            if (!opCode.run(packet.opcode, packet.data)) {
                 console.warn("Unknown opCode: " + client.opcode);
             }
-            //Reset the incoming packet data.
-            client.opcode = 0;
-            client.size = 0;
-            client.totalSize = 0;
         }
     });
 
     // When the client requests to end the TCP connection with the server, the server
     // ends the connection.
     socket.on('end', function () {
+        closeAllFiles();
         console.log('Closing connection with the client');
     });
 
     // Don't forget to catch error, for your own sake.
     socket.on('error', function (err) {
+        closeAllFiles();
         console.log(`Error: ${err}`);
     });
 });

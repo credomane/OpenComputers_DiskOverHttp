@@ -9,6 +9,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "luamin": "^1.0.4",
     "minimist": "^1.2.5",
     "uuid": "^8.3.0"
   }

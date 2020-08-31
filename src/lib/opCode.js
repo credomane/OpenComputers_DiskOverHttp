@@ -3,18 +3,13 @@
 const fs = require("fs");
 
 class OpCode {
-    constructor(opCodeLocation) {
-        const opCodeFiles = fs.readdirSync(opCodeLocation);
+    constructor(opCodeArray = []) {
 
         this.ops = {};
         this.params = {};
 
-        for (let file of opCodeFiles) {
-            if (!file.endsWith(".js")) {
-                continue;
-            }
-            let command = require(opCodeLocation + "/" + file);
-            this.register(command);
+        for (let op of opCodeArray) {
+            this.register(op);
         }
     }
 
@@ -49,8 +44,7 @@ class OpCode {
             this.ops[opCode] = op;
             return true;
         }
-        console.log(opName + " wants opCode " + opCode + " but it is already taken by " + this.ops[opCode].name);
-        return false;
+        throw new Error((opName + " wants opCode " + opCode + " but it is already taken by " + this.ops[opCode].name));
     }
 
 
